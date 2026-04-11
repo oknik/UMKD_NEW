@@ -16,12 +16,13 @@ import pickle
 
 class SICAPv2Dataset(data_utils.Dataset):
 
-    def __init__(self, patch_level, img_root, dataset, transform=None, fold=3, balanced=False):
+    def __init__(self, patch_level, img_root, dataset, transform=None, fold=3, balanced=False, target_classes=None):
         self.data_list = []
         # self.items = []
         self.transform = transform
         self.patch_level = patch_level
         self.balanced = balanced
+        self.target_classes = target_classes
         # if dataset == 'train':
         #     data_num = [i for i in range(10) if i != fold]
         # elif dataset == 'valid':
@@ -34,22 +35,34 @@ class SICAPv2Dataset(data_utils.Dataset):
         print("Use the data fold: {}".format(data_num))
         for i in data_num:
             if self.balanced:
-                f = open('/data3/tongshuo/dataset/image/SICAPv2/ten_fold_balanced/fold_{}.csv'.format(i), "r")
+                f = open('/root/autodl-tmp/SICAPv2/split/ten_fold_balance/fold_{}.csv'.format(i), "r")
             else:
-                f = open('/data3/tongshuo/dataset/image/SICAPv2/ten_fold/fold_{}.csv'.format(i), "r")
+                f = open('/root/autodl-tmp/SICAPv2/split/ten_fold/fold_{}.csv'.format(i), "r")
             reader = csv.reader(f)
             next(reader)
+            # for row in reader:
+            #     self.data_list.append(row[1:])
             for row in reader:
-                self.data_list.append(row[1:])
+                label = int(row[-1])
+                if self.target_classes is None or label in self.target_classes:
+                    self.data_list.append(row[1:])
 
-        self.label_list = [int(x[-1]) for x in self.data_list] #提出了所有折中的label
+        if self.target_classes is None:
+            self.label_list = [int(x[-1]) for x in self.data_list]
+        else:
+            self.label_list = [self.target_classes.index(int(x[-1])) for x in self.data_list]
         # 提取出0, 1, 2
         #self.label_list = [x for x in self.label_list if x in {0, 1, 2}]
 
         if self.patch_level == 1:
             self.patch_class = self.get_token_class(fold)
 
-        self.label_num = [0, 0, 0, 0]
+        if self.target_classes is None:
+            num_classes = 4
+        else:
+            num_classes = len(self.target_classes)
+
+        self.label_num = [0] * num_classes
         for each in self.label_list:
             self.label_num[each] += 1
         print(self.label_num) #[23229, 2199, 4763, 786, 638]
@@ -60,7 +73,9 @@ class SICAPv2Dataset(data_utils.Dataset):
         # print(item)
         img = item[0]
         label = int(item[1])
-        img_path = '/data3/tongshuo/dataset/image/SICAPv2/images/' + img
+        if self.target_classes is not None:
+            label = self.target_classes.index(label)
+        img_path = '/root/autodl-tmp/SICAPv2/images/' + img
         # label = int(item[-1])
         img = Image.open(img_path).convert('RGB')
 

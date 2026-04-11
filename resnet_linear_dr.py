@@ -11,7 +11,7 @@ from torchvision import transforms
 
 from utils.stream_metrics import StreamClsMetrics, AverageMeter
 from utils.metric import *
-from datasets import StanfordDogs, CUB200, DRDataset, APTOSDataset, SICAPv2Dataset
+from datasets import StanfordDogs, CUB200, DRDataset, APTOSDataset, SICAPv2Dataset, INDataset
 from models.resnet import resnet18, resnet34, resnet50, resnet101
 from utils import mkdir_if_missing
 from torchvision.transforms import InterpolationMode
@@ -38,12 +38,12 @@ def arg2str(args):
 def get_parser():
     parser = argparse.ArgumentParser()
     # Dataset
-    parser.add_argument("--data_root", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/data')
-    parser.add_argument("--dataset", type=str, default='sicapv2',
-                        choices=['eyepacs', 'aptos', 'sicapv2'])
+    parser.add_argument("--data_root", type=str, default='/root/autodl-tmp/UMKD_new/IN')
+    parser.add_argument("--dataset", type=str, default='in',
+                        choices=['eyepacs', 'aptos', 'sicapv2', 'in'])
     parser.add_argument("--task_type", type=str, default='balanced_teacher',
                         choices=['balanced_kd', 'balanced_teacher'])
-    parser.add_argument("--model", type=str, default='resnet18')
+    parser.add_argument("--model", type=str, default='resnet50')
 
     # Train opts
     parser.add_argument("--batch_size", type=int, default=128)
@@ -143,10 +143,36 @@ def validate(model, loader, device, metrics):
 
 def main():
     opts = get_parser().parse_args()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    run_dir = os.path.join('runs', timestamp)
+    mkdir_if_missing(run_dir)
+    mkdir_if_missing(os.path.join(run_dir, 'checkpoints'))
+    mkdir_if_missing(os.path.join(run_dir, 'logs'))
+
+    with open(os.path.join(run_dir, 'config.txt'), 'w') as f:
+        f.write(arg2str(opts))
+    
+    class Logger(object):
+        def __init__(self, filename):
+            self.terminal = sys.stdout
+            self.log = open(filename, "a")
+
+        def write(self, message):
+            self.terminal.write(message)
+            self.log.write(message)
+
+        def flush(self):
+            self.terminal.flush()
+            self.log.flush()
+
+    log_path = os.path.join(run_dir, 'logs', 'train.log')
+    sys.stdout = Logger(log_path)
+    sys.stderr = sys.stdout  # 可选：把报错也写进去
 
     # dir and log
-    mkdir_if_missing('checkpoints')
-    mkdir_if_missing('logs')
+    # mkdir_if_missing('checkpoints')
+    # mkdir_if_missing('logs')
     #sys.stdout = Logger(os.path.join('logs', 'teacher_%s.txt'%(opts.dataset)))
 
     os.environ['CUDA_VISIBLE_DEVICES'] = opts.gpu_id
@@ -167,14 +193,17 @@ def main():
     elif opts.dataset == 'eyepacs':
         dataset = DRDataset
         num_classes = 5
+    elif opts.dataset == 'in':
+        dataset = INDataset
+        num_classes = 3
 
     resnet = _model_dict[opts.model]
     if opts.task_type == 'balanced_teacher':
         task_name = 'balanced_teacher'
     else:
         task_name = 'imbalanced_teacher'
-    max_acc_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/%s/%s_%s_max_acc_ce_notran_supervise.pth'%(task_name, opts.model, opts.dataset)
-    min_mae_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/%s/%s_%s_min_mae_ce_notran_supervise.pth'%(task_name, opts.model, opts.dataset)
+    max_acc_ckpt = os.path.join(run_dir, 'checkpoints', 'max_acc.pth')
+    min_mae_ckpt = os.path.join(run_dir, 'checkpoints', 'min_mae.pth')
     # Set up dataloader
     '''
     train_dst = dataset(root=data_root, split='train',
@@ -313,8 +342,8 @@ def main():
                              metrics=metrics)
         print("Confusion Matrix:\n",val_score['Confusion Matrix'])
         print(metrics.to_str(val_score))
-        score_path = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/%s/%s_%s_score_ce_notran_supervise.txt'%(task_name, opts.model, opts.dataset)
-        score_best_path = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/%s/%s_%s_score_best_ce_notran_supervise.txt'%(task_name, opts.model, opts.dataset)
+        score_path = os.path.join(run_dir, 'logs', 'score.txt')
+        score_best_path = os.path.join(run_dir, 'logs', 'score_best.txt')
 
         with open(score_path, mode='a') as f:
             f.write("^^^^^^^^Epoch %d:\n"%cur_epoch)

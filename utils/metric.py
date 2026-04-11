@@ -22,8 +22,12 @@ def get_model_ckpts(dataset_name, task_type):
     
     elif dataset_name == 'sicapv2':
         if task_type == 'balanced_teacher':
-            t1_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/balanced_teacher/resnet50_sicap0123_max_acc_ce_notran.pth'
-            t2_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/balanced_teacher/resnet50_sicap0123_1_max_acc_ce_notran.pth'
+            # 两个二分类
+            # t1_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260407_203605/checkpoints/max_acc.pth'
+            # t2_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260408_113452/checkpoints/max_acc.pth'
+            # 两个四分类
+            t1_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260407_145253/checkpoints/max_acc.pth'
+            t2_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260408_170233/checkpoints/max_acc.pth'
         else:
             t1_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/imbalanced_teacher/resnet50_sicap0123_max_acc_ce_notran.pth'
             t2_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/imbalanced_teacher/resnet50_sicap0123_1_max_acc_ce_notran.pth'

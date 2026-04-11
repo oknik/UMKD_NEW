@@ -5,3 +5,4 @@ from .dr_012 import DRDataset012
 from .dr_34 import DRDataset34
 from .aptos import APTOSDataset
 from .sicapv2 import SICAPv2Dataset
+from .in_dataset import INDataset

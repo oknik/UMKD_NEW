@@ -14,7 +14,7 @@ import torchvision.transforms as transforms
 from torchvision.transforms import InterpolationMode
 import pickle
 
-class SICAPv2Dataset(data_utils.Dataset):
+class INDataset(data_utils.Dataset):
 
     def __init__(self, patch_level, img_root, dataset, transform=None, fold=3, balanced=False):
         self.data_list = []
@@ -34,9 +34,9 @@ class SICAPv2Dataset(data_utils.Dataset):
         print("Use the data fold: {}".format(data_num))
         for i in data_num:
             if self.balanced:
-                f = open('/data3/tongshuo/dataset/image/SICAPv2/ten_fold_balanced/fold_{}.csv'.format(i), "r")
+                f = open('/root/autodl-tmp/UMKD_new/IN/split/ten_fold_balance/fold_{}.csv'.format(i), "r")
             else:
-                f = open('/data3/tongshuo/dataset/image/SICAPv2/ten_fold/fold_{}.csv'.format(i), "r")
+                f = open('/root/autodl-tmp/UMKD_new/IN/split/ten_fold/fold_{}.csv'.format(i), "r")
             reader = csv.reader(f)
             next(reader)
             for row in reader:
@@ -49,7 +49,7 @@ class SICAPv2Dataset(data_utils.Dataset):
         if self.patch_level == 1:
             self.patch_class = self.get_token_class(fold)
 
-        self.label_num = [0, 0, 0, 0]
+        self.label_num = [0, 0, 0]
         for each in self.label_list:
             self.label_num[each] += 1
         print(self.label_num) #[23229, 2199, 4763, 786, 638]
@@ -57,16 +57,32 @@ class SICAPv2Dataset(data_utils.Dataset):
 
     def __getitem__(self, idx):
         item = copy.deepcopy(self.data_list[idx])
-        # print(item)
-        img = item[0]
+
+        id_ = item[0]          # 现在这里是 id
         label = int(item[1])
-        img_path = '/data3/tongshuo/dataset/image/SICAPv2/images/' + img
-        # label = int(item[-1])
-        img = Image.open(img_path).convert('RGB')
+
+        img_name_C = f"{id_}-{label}-C.png"
+        img_name_G = f"{id_}-{label}-G.png"
+
+        img_path_C = os.path.join('/root/autodl-tmp/UMKD_new/IN/images/', img_name_C)
+        img_path_G = os.path.join('/root/autodl-tmp/UMKD_new/IN/images/', img_name_G)
+        
+        img_C = Image.open(img_path_C).convert('RGB')
+        img_G = Image.open(img_path_G).convert('RGB')
 
         if self.transform:
-            img = self.transform(img)
+            seed = np.random.randint(2147483647)
 
+            random.seed(seed)
+            torch.manual_seed(seed)
+            img_C = self.transform(img_C)
+
+            random.seed(seed)
+            torch.manual_seed(seed)
+            img_G = self.transform(img_G)
+
+        img = torch.cat([img_C, img_G], dim=0)
+        
         return img, label
 
     def __len__(self):

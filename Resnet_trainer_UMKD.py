@@ -23,10 +23,12 @@ from models.resnet_SDD_REDL_multi import resnet18_sdd_redl, resnet34_sdd_redl, r
 from models.resnet_SDD_LP import resnet18_sdd_lp, resnet34_sdd_lp, resnet50_sdd_lp
 from torchvision.transforms import InterpolationMode
 import torch.nn.functional as F
-from loss import dkd_no_labels_loss, dkd_loss, multi_dkd, uc_multi_dkd
+from loss import dkd_no_labels_loss, dkd_loss, multi_dkd
+from loss.SDD import uc_multi_dkd
 import time
 import re
 from utils.metric import predictive_entropy, mutual_information
+from datetime import datetime
 
 _model_dict = {
     'resnet18': resnet18_sdd_lp,
@@ -68,11 +70,11 @@ def count_parameters(model):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_root", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/data')
+    parser.add_argument("--data_root", type=str, default='/root/autodl-tmp/SICAPv2')
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--model", type=str, default='resnet18')
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--gpu_id", type=str, default='5')
+    parser.add_argument("--gpu_id", type=str, default='0')
     parser.add_argument("--random_seed", type=int, default=1337)
     parser.add_argument("--download", action='store_true', default=False)
     parser.add_argument("--epochs", type=int, default=50)
@@ -83,7 +85,7 @@ def get_parser():
     # parser.add_argument("--t2_ckpt", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/resnet50_1_aptos01234_max_acc_ce_notran.pth')
     # parser.add_argument("--t1_ckpt", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/balanced_teacher/resnet50_aptos01234_max_acc_ce_notran.pth')
     # parser.add_argument("--t2_ckpt", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/balanced_teacher/resnet50_aptos01234_1_max_acc_ce_notran.pth')
-    parser.add_argument("--dataset", type=str, default='aptos',
+    parser.add_argument("--dataset", type=str, default='sicapv2',
                         choices=['eyepacs', 'aptos', 'sicapv2', 'aptos01234'])
     parser.add_argument("--task_type", type=str, default='balanced_teacher',
                         choices=['balanced_kd', 'balanced_teacher'])
@@ -91,7 +93,7 @@ def get_parser():
                         choices=['layer1', 'layer2', 'layer3', 'layer4'])
     return parser
 
-def amal(cur_epoch, criterion, criterion_ce, criterion_cf, criterion_cf_LP, t1_low_pass, t2_low_pass, model, cfl_blk, cfl_blk_SA, teachers, optim, train_loader, device, scheduler=None, print_interval=2):
+def amal(cur_epoch, criterion, criterion_ce, criterion_cf, criterion_cf_LP, t1_low_pass, t2_low_pass, model, cfl_blk, cfl_blk_SA, teachers, optim, train_loader, device, opts, scheduler=None, print_interval=2):
     """Train and return epoch loss"""
     t1, t2 = teachers
     #if scheduler is not None:
@@ -117,6 +119,10 @@ def amal(cur_epoch, criterion, criterion_ce, criterion_cf, criterion_cf_LP, t1_l
             uc_mean = (uc1 + uc2) / 2
             stacked_output = torch.stack((patch_score_t1, patch_score_t2), dim=0)
             patch_t_outs = torch.mean(stacked_output, dim=0)
+            # if opts.dataset == 'sicapv2':
+            #     patch_t_outs = torch.cat((patch_score_t1, patch_score_t2), dim=1)  # (B,4,21)
+            # else:
+            #     patch_t_outs = torch.mean(stacked_output, dim=0)
 ###############################################################################            
             ft1_SA = t1.layer1.output
             ft2_SA = t2.layer1.output
@@ -234,14 +240,17 @@ def validate(model, loader, device, metrics):
 
 def main():
     opts = get_parser().parse_args()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     os.environ['CUDA_VISIBLE_DEVICES'] = opts.gpu_id
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    t1_ckpt, t2_ckpt = get_model_ckpts(opts.dataset, opts.task_type)
+    t1_ckpt, t2_ckpt = get_model_ckpts(opts.dataset, opts.task_type) #metric.py
     print(t1_ckpt, t2_ckpt)
     # Set up random seed
-    mkdir_if_missing('checkpoints')
-    mkdir_if_missing('logs')
-    sys.stdout = Logger(os.path.join('logs', 'amal_%s.txt'%(opts.model)))
+    run_dir = os.path.join('runs', timestamp)
+    mkdir_if_missing(run_dir)
+    mkdir_if_missing(os.path.join(run_dir, 'checkpoints'))
+    mkdir_if_missing(os.path.join(run_dir, 'logs'))
+    sys.stdout = Logger(os.path.join(run_dir, 'logs', 'amal_%s.txt'%(opts.model)))
     print(opts)
     torch.manual_seed(opts.random_seed)
     torch.cuda.manual_seed(opts.random_seed)
@@ -256,6 +265,7 @@ def main():
         num_classes = 5
     elif opts.dataset == 'sicapv2':
         dataset = SICAPv2Dataset
+        num_classes_t = 4
         num_classes = 4
     elif opts.dataset == 'eyepacs':
         dataset = DRDataset
@@ -270,7 +280,8 @@ def main():
     min_en = 1000
 
     mkdir_if_missing('checkpoints')
-    macc_ckpt = "/data4/tongshuo/Grading/CommonFeatureLearning/ckp_rebuttal/%s_%s_macc_UMKD.pth"%(opts.dataset, opts.task_type)
+    macc_ckpt = os.path.join(run_dir, 'checkpoints', 'max_acc.pth')
+    # macc_ckpt = "/data4/tongshuo/Grading/CommonFeatureLearning/ckp_rebuttal/%s_%s_macc_UMKD.pth"%(opts.dataset, opts.task_type)
     # max_acc_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/student/%s/%s/%s_%s_%s_max_acc_3tckd_1_unckd.pth'%(opts.dataset, opts.task_type, opts.model, opts.dataset, opts.layer)
     # min_mae_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/student/%s/%s/%s_%s_%s_min_mae_3tckd_1_unckd.pth'%(opts.dataset, opts.task_type, opts.model, opts.dataset, opts.layer)
     #  Set up dataloader
@@ -298,12 +309,12 @@ def main():
 
     # pretrained teachers
     t1_model_name = 'resnet50'
-    t1 = _model_dict[t1_model_name](num_classes=num_classes, M = '[1,2,4]').to(device)
+    t1 = _model_dict[t1_model_name](num_classes=num_classes_t, M = '[1,2,4]').to(device)
     t2_model_name = 'resnet50'
-    t2 = _model_dict[t2_model_name](num_classes=num_classes, M = '[1,2,4]').to(device)
+    t2 = _model_dict[t2_model_name](num_classes=num_classes_t, M = '[1,2,4]').to(device)
     print("Loading pretrained teachers ...\nT1: %s, T2: %s"%(t1_model_name, t2_model_name))
-    t1.load_state_dict(torch.load(t1_ckpt)['model_state'])
-    t2.load_state_dict(torch.load(t2_ckpt)['model_state'])
+    t1.load_state_dict(torch.load(t1_ckpt, weights_only=False)['model_state'])
+    t2.load_state_dict(torch.load(t2_ckpt, weights_only=False)['model_state'])
     t1.eval()
     t2.eval()
     print("Target student: %s"%opts.model)
@@ -411,7 +422,8 @@ def main():
                             optim=optimizer,
                             train_loader=train_loader,
                             device=device,
-                            scheduler=scheduler)
+                            scheduler=scheduler,
+                            opts=opts)
         # print("End of Epoch %d/%d, Average Loss=%f" %
         #      (cur_epoch, opts.epochs, epoch_loss))
 
@@ -429,8 +441,10 @@ def main():
         # dataset_name = re.sub(r'\d', '', opts.dataset)
         # score_path = '/data4/tongshuo/Grading/CommonFeatureLearning/results/student/%s/%s/%s_%s_%s_ce_UKA_2tckd_1_unckd.txt'%(opts.dataset, opts.task_type, opts.model, opts.dataset, opts.layer)
         # score_best_path = '/data4/tongshuo/Grading/CommonFeatureLearning/results/student/%s/%s/%s_%s_%s_best_ce_UKA_2tckd_1_unckd.txt'%(opts.dataset, opts.task_type, opts.model, opts.dataset, opts.layer)
-        score_path = '/data4/tongshuo/Grading/CommonFeatureLearning/result_rebuttal/%s_%s_UMKD.txt'%(opts.dataset, opts.task_type)
-        score_best_path = '/data4/tongshuo/Grading/CommonFeatureLearning/result_rebuttal/%s_%s_best_UMKD.txt'%(opts.dataset, opts.task_type)
+        score_path = os.path.join(run_dir, 'logs', 'score.txt')
+        score_best_path = os.path.join(run_dir, 'logs', 'score_best.txt')
+        # score_path = '/data4/tongshuo/Grading/CommonFeatureLearning/result_rebuttal/%s_%s_UMKD.txt'%(opts.dataset, opts.task_type)
+        # score_best_path = '/data4/tongshuo/Grading/CommonFeatureLearning/result_rebuttal/%s_%s_best_UMKD.txt'%(opts.dataset, opts.task_type)
         
         with open(score_path, mode='a') as f:
             f.write("^^^^^^^^Epoch %d:\n"%cur_epoch)
