@@ -40,7 +40,7 @@ class INDataset(data_utils.Dataset):
             reader = csv.reader(f)
             next(reader)
             for row in reader:
-                self.data_list.append(row[1:])
+                self.data_list.append(row)
 
         self.label_list = [int(x[-1]) for x in self.data_list] #提出了所有折中的label
         # 提取出0, 1, 2
@@ -82,7 +82,7 @@ class INDataset(data_utils.Dataset):
             img_G = self.transform(img_G)
 
         img = torch.cat([img_C, img_G], dim=0)
-        
+
         return img, label
 
     def __len__(self):
