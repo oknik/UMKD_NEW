@@ -32,6 +32,7 @@ from datetime import datetime
 
 _model_dict = {
     'resnet18': resnet18_sdd_lp,
+    'resnet18_sdd_redl': resnet18_sdd_redl,
     'resnet34': resnet34_sdd_redl,
     'resnet50': resnet50_sdd_redl,
 }
@@ -323,9 +324,9 @@ def main():
         )
         return model
 
-    t1_model_name = 'resnet50'
+    t1_model_name = 'resnet18_sdd_redl'
     t1 = _model_dict[t1_model_name](num_classes=num_classes_t, M = '[1,2,4]').to(device)
-    t2_model_name = 'resnet50'
+    t2_model_name = 'resnet18_sdd_redl'
     t2 = _model_dict[t2_model_name](num_classes=num_classes_t, M = '[1,2,4]').to(device)
     if opts.dataset == 'in':
         t1 = convert_to_6ch(t1).to(device)

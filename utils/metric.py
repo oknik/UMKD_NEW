@@ -48,9 +48,12 @@ def get_model_ckpts(dataset_name, task_type):
             t2_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/resnet50_1_aptos01234_max_acc_ce_notran.pth'
     elif dataset_name == 'in':
         if task_type == 'balanced_teacher':
-            # 两个三分类
-            t1_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260412_150832/checkpoints/max_acc.pth'
-            t2_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260412_151222/checkpoints/max_acc.pth'
+            # 两个Resnet50三分类
+            # t1_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260412_150832/checkpoints/max_acc.pth'
+            # t2_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260412_151222/checkpoints/max_acc.pth'
+            # 两个Resnet18三分类
+            t1_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260412_153626/checkpoints/max_acc.pth'
+            t2_ckpt = '/root/autodl-tmp/UMKD_new/runs/20260412_153929/checkpoints/max_acc.pth'
         else:
             t1_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/imbalanced_teacher/resnet50_in_max_acc_ce_notran.pth'
             t2_ckpt = '/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/imbalanced_teacher/resnet50_in_1_max_acc_ce_notran.pth'
