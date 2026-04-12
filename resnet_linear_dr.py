@@ -248,10 +248,27 @@ def main():
         train_data = dataset(None,None,'train',tran,0, False)
         val_data = dataset(None,None,'valid',tran,0, False)
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=opts.batch_size, shuffle=True, drop_last=True)
-    val_loader = torch.utils.data.DataLoader(val_data, batch_size=opts.batch_size, shuffle=False, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=opts.batch_size, shuffle=True, drop_last=False)
+    val_loader = torch.utils.data.DataLoader(val_data, batch_size=opts.batch_size, shuffle=False, drop_last=False)
 
     model = resnet(pretrained=True, num_classes=num_classes).to(device)
+    if opts.dataset == 'in' and model.conv1.in_channels != 6:
+        old_conv = model.conv1
+        model.conv1 = nn.Conv2d(
+            6, 64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False
+        )
+
+        # 复制预训练权重
+        with torch.no_grad():
+            model.conv1.weight[:, :3, :, :] = old_conv.weight
+            model.conv1.weight[:, 3:, :, :] = old_conv.weight
+
+    model = model.to(device)
+
     metrics = StreamClsMetrics(num_classes)
 ##############################################
     # 打印模型的总参数量

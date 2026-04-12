@@ -15,7 +15,7 @@ from loss import SoftCELoss, CFLoss, CFLoss_SA, euclidean_loss
 from utils.stream_metrics import StreamClsMetrics, AverageMeter
 from utils.metric import *
 from models.cfl import CFL_ConvBlock
-from datasets import StanfordDogs, CUB200, DRDataset, APTOSDataset, SICAPv2Dataset
+from datasets import StanfordDogs, CUB200, DRDataset, APTOSDataset, SICAPv2Dataset, INDataset
 from utils import mkdir_if_missing, Logger
 from dataloader import get_concat_dataloader
 from torchvision import transforms
@@ -70,7 +70,7 @@ def count_parameters(model):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_root", type=str, default='/root/autodl-tmp/SICAPv2')
+    parser.add_argument("--data_root", type=str, default='/root/autodl-tmp/UMKD_new/IN')
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--model", type=str, default='resnet18')
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -85,8 +85,8 @@ def get_parser():
     # parser.add_argument("--t2_ckpt", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/resnet50_1_aptos01234_max_acc_ce_notran.pth')
     # parser.add_argument("--t1_ckpt", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/balanced_teacher/resnet50_aptos01234_max_acc_ce_notran.pth')
     # parser.add_argument("--t2_ckpt", type=str, default='/data4/tongshuo/Grading/CommonFeatureLearning/results/baselines/balanced_teacher/resnet50_aptos01234_1_max_acc_ce_notran.pth')
-    parser.add_argument("--dataset", type=str, default='sicapv2',
-                        choices=['eyepacs', 'aptos', 'sicapv2', 'aptos01234'])
+    parser.add_argument("--dataset", type=str, default='in',
+                        choices=['eyepacs', 'aptos', 'sicapv2', 'aptos01234', 'in'])
     parser.add_argument("--task_type", type=str, default='balanced_teacher',
                         choices=['balanced_kd', 'balanced_teacher'])
     parser.add_argument("--layer", type=str, default='layer1',
@@ -270,6 +270,10 @@ def main():
     elif opts.dataset == 'eyepacs':
         dataset = DRDataset
         num_classes = 5
+    elif opts.dataset == 'in':
+        dataset = INDataset
+        num_classes_t = 3
+        num_classes = 3
 
     cur_epoch = 0
     max_acc = 0.0
@@ -304,14 +308,28 @@ def main():
     else:
         train_data = dataset(None,None,'train',tran,0, False)
         val_data = dataset(None,None,'valid',tran,0, False)
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=opts.batch_size, shuffle=True, drop_last=True)
-    val_loader = torch.utils.data.DataLoader(val_data, batch_size=opts.batch_size, shuffle=False, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=opts.batch_size, shuffle=True, drop_last=False)
+    val_loader = torch.utils.data.DataLoader(val_data, batch_size=opts.batch_size, shuffle=False, drop_last=False)
 
     # pretrained teachers
+    def convert_to_6ch(model):
+        old_conv = model.conv1
+        model.conv1 = nn.Conv2d(
+            6, 64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False
+        )
+        return model
+
     t1_model_name = 'resnet50'
     t1 = _model_dict[t1_model_name](num_classes=num_classes_t, M = '[1,2,4]').to(device)
     t2_model_name = 'resnet50'
     t2 = _model_dict[t2_model_name](num_classes=num_classes_t, M = '[1,2,4]').to(device)
+    if opts.dataset == 'in':
+        t1 = convert_to_6ch(t1).to(device)
+        t2 = convert_to_6ch(t2).to(device)
     print("Loading pretrained teachers ...\nT1: %s, T2: %s"%(t1_model_name, t2_model_name))
     t1.load_state_dict(torch.load(t1_ckpt, weights_only=False)['model_state'])
     t2.load_state_dict(torch.load(t2_ckpt, weights_only=False)['model_state'])
@@ -319,6 +337,8 @@ def main():
     t2.eval()
     print("Target student: %s"%opts.model)
     stu = _model_dict[opts.model](pretrained=True, num_classes=num_classes, M = '[1,2,4]').to(device)
+    if opts.dataset == 'in':
+        stu = convert_to_6ch(stu).to(device)
     metrics = StreamClsMetrics(num_classes)
 ##############################################
     # 打印模型的总参数量
