@@ -27,20 +27,28 @@ class INDataset(data_utils.Dataset):
         # elif dataset == 'valid':
         #     data_num = [fold]
 #########训练和测试集转换为8：2##########
-        if dataset == 'train':
-            data_num = [i for i in range(10) if i != fold and i != (fold + 1) % 10]
-        elif dataset == 'valid':
-            data_num = [fold, (fold + 1) % 10]
-        print("Use the data fold: {}".format(data_num))
-        for i in data_num:
-            if self.balanced:
-                f = open('/root/autodl-tmp/UMKD_new/IN/split/ten_fold_balance/fold_{}.csv'.format(i), "r")
-            else:
-                f = open('/root/autodl-tmp/UMKD_new/IN/split/ten_fold/fold_{}.csv'.format(i), "r")
-            reader = csv.reader(f)
-            next(reader)
-            for row in reader:
-                self.data_list.append(row)
+        if dataset == 'train' or dataset == 'valid':
+            if dataset == 'train':
+                data_num = [i for i in range(10) if i != fold and i != (fold + 1) % 10]
+            elif dataset == 'valid':
+                data_num = [fold, (fold + 1) % 10]
+            print("Use the data fold: {}".format(data_num))
+            for i in data_num:
+                if self.balanced:
+                    f = open('/root/autodl-tmp/UMKD_new/IN/split/ten_fold_balance/fold_{}.csv'.format(i), "r")
+                else:
+                    f = open('/root/autodl-tmp/UMKD_new/IN/split/ten_fold/fold_{}.csv'.format(i), "r")
+                reader = csv.reader(f)
+                next(reader)
+                for row in reader:
+                    self.data_list.append(row)
+        elif dataset == 'test':
+            test_csv = '/root/autodl-tmp/UMKD_new/IN/split/test.csv'
+            with open(test_csv, "r") as f:
+                reader = csv.reader(f)
+                next(reader)
+                for row in reader:
+                    self.data_list.append(row)
 
         self.label_list = [int(x[-1]) for x in self.data_list] #提出了所有折中的label
         # 提取出0, 1, 2
